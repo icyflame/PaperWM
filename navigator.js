@@ -87,10 +87,23 @@ class ActionDispatcher {
 
         // grab = stage.grab(this.actor)
         grab = Main.pushModal(this.actor);
-        // We expect at least a keyboard grab here
+        // We expect at least a keyboard grab here. Fail gracefully if keyboard could not be grabbed.
+        // Main here is main.js inside the Gnome Shell code:
+        // https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/891c0e250ade61857d72cca277d64fd8f655cde3/js/ui/main.js#L682-701
+        //
+        // Throwing an error here crashed Gnome Shell. I need to restart the PaperWM extension in order to fix the crash.
+        //
+        // Copy this code over from Gnome Shell's codebase where pushModal is not able to grab the desired input method:
+        // https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/891c0e250ade61857d72cca277d64fd8f655cde3/js/ui/dnd.js#L251
+        //
+        // I don't know if this will work. But "popModal" instead of "throw" is bound to be an improvement.
+        //
+        // TODO: Indicate to the user that this Grab failed. The user will have to retry their action when this fails.
         if ((grab.get_seat_state() & Clutter.GrabState.KEYBOARD) === 0) {
             console.error("Failed to grab modal");
-            throw new Error('Could not grab modal');
+            console.error('Could not grab modal - failing gracefully');
+            Main.popModal(grab);
+            return;
         }
 
         this.signals.connect(this.actor, 'key-press-event', this._keyPressEvent.bind(this));
