@@ -79,6 +79,7 @@ class ActionDispatcher {
         this.actor = Tiling.spaces.spaceContainer;
         this.actor.set_flags(Clutter.ActorFlags.REACTIVE);
         this.navigator = getNavigator();
+		this.success = true;
 
         if (grab) {
             Utils.debug("#dispatch", "already in grab");
@@ -89,8 +90,21 @@ class ActionDispatcher {
         grab = Main.pushModal(this.actor);
         // We expect at least a keyboard grab here
         if ((grab.get_seat_state() & Clutter.GrabState.KEYBOARD) === 0) {
-            console.error("Failed to grab modal");
-            throw new Error('Could not grab modal');
+            console.error("[Fix-Attempt-2] Failed to grab modal - failing gracefully");
+
+			// Release the current grab which does not match what we want.
+			// Set `grab` to `null`. So, we will attempt to grab the keyboard again next time.
+			this.success = false;
+			try {
+				if (grab) {
+					Main.popModal(grab);
+					grab = null;
+				}
+			} catch (e) {
+				Utils.debug("[Fix-Attempt-2] Failed to release grab: ", e);
+			}
+
+			return;
         }
 
         this.signals.connect(this.actor, 'key-press-event', this._keyPressEvent.bind(this));
@@ -101,6 +115,9 @@ class ActionDispatcher {
     }
 
     show(backward, binding, mask) {
+		// If grab was not successful, don't try to do this.
+		if (!this.success) return;
+
         this._modifierMask = getModLock(mask);
         this.navigator = getNavigator();
         TopBar.fixTopBar();
@@ -441,16 +458,21 @@ function finishNavigation(force = false) {
  * @returns {ActionDispatcher}
  */
 function getActionDispatcher(mode) {
-    if (dispatcher) {
-        dispatcher.mode |= mode;
-        return dispatcher;
+    if (dispatcher === null) {
+		dispatcher = new ActionDispatcher();
+
+		if (!dispatcher.success) {
+            console.error("[Fix-Attempt-2] Action dispatcher creation was not successful");
+			return dispatcher;
+		}
     }
-    dispatcher = new ActionDispatcher();
-    return getActionDispatcher(mode);
+
+	dispatcher.mode |= mode;
+	return dispatcher;
 }
 
 /**
- * Fishes current dispatcher (if any).
+ * Finishes current dispatcher (if any).
  */
 function finishDispatching() {
     dispatcher?._finish(global.get_current_time());
@@ -473,5 +495,11 @@ function dismissDispatcher(mode) {
 
 function preview_navigate(meta_window, space, { display, screen, binding }) {
     let tabPopup = getActionDispatcher(Clutter.GrabState.KEYBOARD);
-    tabPopup.show(binding.is_reversed(), binding.get_name(), binding.get_mask());
+	// Getting the action dispatcher does not always succeed. In the cases where it does not
+	// succeed, attempt to fail gracefully by destroying what we created and returning silently.
+	if (!tabPopup.success) {
+		tabPopup.destroy();
+	} else {
+		tabPopup.show(binding.is_reversed(), binding.get_name(), binding.get_mask());
+	}
 }
