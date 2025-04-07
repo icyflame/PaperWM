@@ -90,7 +90,7 @@ class ActionDispatcher {
         grab = Main.pushModal(this.actor);
         // We expect at least a keyboard grab here
         if ((grab.get_seat_state() & Clutter.GrabState.KEYBOARD) === 0) {
-            console.error("[Fix-Attempt-2] Failed to grab modal - failing gracefully");
+            console.error("[Fix-Attempt-2: grab modal] Failed to grab modal - failing gracefully");
 
             // Release the current grab which does not match what we want.
             // Set `grab` to `null`. So, we will attempt to grab the keyboard again next time.
@@ -101,7 +101,7 @@ class ActionDispatcher {
                     grab = null;
                 }
             } catch (e) {
-                Utils.debug("[Fix-Attempt-2] Failed to release grab: ", e);
+                Utils.debug("[Fix-Attempt-2: grab modal] Failed to release grab: ", e);
             }
 
             return;
@@ -458,16 +458,19 @@ function finishNavigation(force = false) {
  * @returns {ActionDispatcher}
  */
 function getActionDispatcher(mode) {
-    if (dispatcher === null) {
-        dispatcher = new ActionDispatcher();
-
-        if (!dispatcher.success) {
-            console.error("[Fix-Attempt-2] Action dispatcher creation was not successful");
-            return dispatcher;
-        }
+    // Falsy values include null, undefined, and a few other values. Everything else in Javascript
+    // is truthy.
+    // https://developer.mozilla.org/en-US/docs/Glossary/Falsy
+    if (dispatcher) {
+        dispatcher.mode |= mode;
+        return dispatcher;
     }
 
-    dispatcher.mode |= mode;
+    dispatcher = new ActionDispatcher();
+    if (!dispatcher.success) {
+        console.error("[Fix-Attempt-2: grab modal] Action dispatcher creation was not successful");
+    }
+
     return dispatcher;
 }
 
