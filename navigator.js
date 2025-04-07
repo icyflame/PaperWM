@@ -471,6 +471,7 @@ function getActionDispatcher(mode) {
         console.error("[Fix-Attempt-2: grab modal] Action dispatcher creation was not successful");
     }
 
+    dispatcher.mode |= mode;
     return dispatcher;
 }
 
